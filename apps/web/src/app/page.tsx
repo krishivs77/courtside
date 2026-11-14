@@ -37,7 +37,7 @@ export default async function Home() {
           <h2 className="max-w-3xl text-5xl font-bold tracking-tight">
             Basketball is a game of numbers.
             <span className="text-slate-500">
-              {" "}Let's understand them.
+              {" "}Let&apos;s understand them.
             </span>
           </h2>
 
