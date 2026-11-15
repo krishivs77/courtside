@@ -1,5 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.db import check_database, engine
+from app.models import Team
+
 
 app = FastAPI(
     title="COURTSIDE API",
@@ -24,11 +30,6 @@ def health():
     }
 
 
-from fastapi import HTTPException
-from sqlalchemy.exc import SQLAlchemyError
-from app.db import check_database
-
-
 @app.get("/ready")
 def readiness():
     try:
@@ -44,3 +45,28 @@ def readiness():
         status_code=503,
         detail="Database unavailable",
     )
+
+
+@app.get("/api/v1/teams")
+def get_teams():
+    with engine.connect() as connection:
+        result = connection.execute(
+            select(
+                Team.id,
+                Team.external_id,
+                Team.name,
+                Team.abbreviation,
+                Team.conference,
+            ).order_by(Team.name)
+        )
+
+        return [
+            {
+                "id": row.id,
+                "external_id": row.external_id,
+                "name": row.name,
+                "abbreviation": row.abbreviation,
+                "conference": row.conference,
+            }
+            for row in result
+        ]
