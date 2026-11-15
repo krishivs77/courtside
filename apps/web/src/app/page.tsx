@@ -45,6 +45,12 @@ export default async function Home() {
             Explore NBA performance, discover statistical trends,
             and understand the game through data.
           </p>
+          <a
+            href="/teams"
+            className="mt-8 inline-flex rounded-xl bg-orange-500 px-6 py-3 text-sm font-bold text-black transition hover:bg-orange-400"
+          >
+            Explore NBA Teams
+          </a>
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
