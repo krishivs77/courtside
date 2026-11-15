@@ -22,3 +22,25 @@ def health():
         "service": "courtside-api",
         "version": "0.1.0",
     }
+
+
+from fastapi import HTTPException
+from sqlalchemy.exc import SQLAlchemyError
+from app.db import check_database
+
+
+@app.get("/ready")
+def readiness():
+    try:
+        if check_database():
+            return {
+                "status": "ready",
+                "database": "connected",
+            }
+    except SQLAlchemyError:
+        pass
+
+    raise HTTPException(
+        status_code=503,
+        detail="Database unavailable",
+    )
