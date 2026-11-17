@@ -54,3 +54,17 @@ Batch exit code 1 means failures or unattempted targets remain. Report exit code
 ## Tests
 
 `RUN_POSTGRES_TESTS=1 make test` runs retry/resume/interruption/circuit-breaker/locking/checkpoint tests, isolated PostgreSQL reconciliation tests, and the existing API/web checks. Integration fixtures use disposable UUID schemas and never reset application tables or volumes.
+
+## Verified local run — 2026-11-17
+
+The frozen bundled active cohort contained 519 player IDs. The completed 2025–26 regular-season run produced 436 successful nonempty responses and 83 empty responses, with no errors or pending targets. PostgreSQL contains 23,505 appearances for those 436 players, dated 2025-10-21 through 2026-04-12.
+
+The final report found zero missing minutes, missing source dates, missing provenance, invalid stat rows, or source/database ID mismatches. Rerunning the full cohort verified saved game IDs against PostgreSQL and skipped every target without upstream refetches; stored totals remained unchanged. The existing API served newly imported LeBron James (60 games) and Nikola Jokić (65 games) in live smoke tests.
+
+Local operational files (ignored by Git):
+
+- `data/ingestion/active-2025-26.json`: resumable cohort/checkpoint.
+- `data/ingestion/active-quality-2025-26.json`: final per-player report.
+- `data/ingestion/active-2025-26.log`: live-run progress log.
+
+These are observations of the returned data, not independent season-completeness certification. The 83 empty responses warrant follow-up against a season-specific participant roster before claiming full coverage. All 35 backend tests, two frontend tests, ESLint, and TypeScript checks passed.
