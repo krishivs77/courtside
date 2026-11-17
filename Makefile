@@ -18,7 +18,7 @@ test:
 	. ./.env; \
 	set +a; \
 	(cd apps/api && .venv/bin/python -m pytest -q) && \
-	(cd apps/web && npm run lint && npx tsc --noEmit)
+	(cd apps/web && npm test && npm run lint && npx tsc --noEmit)
 
 stop:
 	@docker compose down

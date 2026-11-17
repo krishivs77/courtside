@@ -31,7 +31,7 @@ export default function PlayersPage() {
 
           <p className="mt-4 max-w-2xl text-slate-400">
             Search the NBA player database. Explore player profiles,
-            identities, and eventually game-by-game performance.
+            identities, and imported game-by-game performance.
           </p>
         </section>
 

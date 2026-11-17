@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 
 type Player = {
@@ -89,7 +90,8 @@ export default function PlayerSearch() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {players.map((player) => (
-          <article
+          <Link
+            href={`/players/${player.id}`}
             key={player.id}
             className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-orange-500/40"
           >
@@ -114,10 +116,10 @@ export default function PlayerSearch() {
                 NBA ID: {player.external_id}
               </p>
               <p className="mt-2 text-xs text-orange-400">
-                Performance analytics coming soon
+                View performance analytics →
               </p>
             </div>
-          </article>
+          </Link>
         ))}
       </div>
     </div>
