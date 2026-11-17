@@ -111,10 +111,10 @@ def persist_logs(frame: pd.DataFrame, player_nba_id: int, season: str, db_engine
             game_date = pd.to_datetime(row["GAME_DATE"]).date()
 
             start_year = int(season[:4])
-            if not (datetime(start_year, 7, 1).date() <= game_date < datetime(start_year + 1, 7, 1).date()):
+            if not (datetime(start_year, 7, 1).date() <= game_date < datetime(start_year + 1, 10, 1).date()):
                 raise ValueError(f"Game date outside season: {game_date}")
             external_id = str(row["Game_ID"])
-            if not re.fullmatch(r"002\d{7}", external_id):
+            if not re.fullmatch(rf"002{start_year % 100:02d}\d{{5}}", external_id):
                 raise ValueError(f"Invalid regular-season game ID: {external_id}")
 
             # Date-only placeholder, NOT verified tipoff time.

@@ -44,3 +44,10 @@ def test_invalid_later_row_rolls_back_entire_import(postgres_db):
     with postgres_db.connect() as conn:
         for model in (Game, PlayerGameStats, Season):
             assert conn.scalar(select(func.count()).select_from(model)) == 0
+
+
+def test_extended_2019_season_accepts_august_bubble_game(postgres_db):
+    frame = sample_frame()
+    frame.loc[0, "Game_ID"] = "0021900001"
+    frame.loc[0, "GAME_DATE"] = "AUG 01, 2020"
+    assert persist_logs(frame, 201939, "2019-20", postgres_db) == 1
