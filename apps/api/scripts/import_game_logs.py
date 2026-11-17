@@ -45,23 +45,35 @@ def parse_matchup(matchup: str) -> tuple[str, str, str]:
 
 
 
-def import_logs(player_nba_id, season):
+class UpstreamUnavailable(RuntimeError):
+    """A retryable NBA transport or response failure (before database writes)."""
+
+
+def validate_season(season: str) -> None:
     if not re.fullmatch(r"\d{4}-\d{2}", season) or int(season[-2:]) != (int(season[:4]) + 1) % 100:
         raise ValueError("Season must use consecutive years, e.g. 2025-26")
-    print(f"Fetching player {player_nba_id}, season {season}...", flush=True)
+
+
+def fetch_logs(player_nba_id: int, season: str) -> pd.DataFrame:
+    validate_season(season)
     try:
         response = PlayerGameLog(
             player_id=player_nba_id, season=season,
             season_type_all_star="Regular Season", timeout=30,
         )
-        frame = response.get_data_frames()[0]
+        return response.get_data_frames()[0]
     except Exception as exc:
-        raise RuntimeError("NBA upstream unavailable; database unchanged. Retry later.") from exc
-    return persist_logs(frame, player_nba_id, season)
+        raise UpstreamUnavailable("NBA upstream unavailable; database unchanged. Retry later.") from exc
+
+
+def import_logs(player_nba_id: int, season: str) -> int:
+    print(f"Fetching player {player_nba_id}, season {season}...", flush=True)
+    return persist_logs(fetch_logs(player_nba_id, season), player_nba_id, season)
 
 
 def persist_logs(frame: pd.DataFrame, player_nba_id: int, season: str, db_engine=engine) -> int:
     """Atomically validate and upsert one player-season response (no inferred zeros)."""
+    validate_season(season)
     if frame.empty:
         raise ValueError("No game logs returned. Database unchanged.")
     retrieved_at = datetime.now(timezone.utc)
