@@ -25,3 +25,6 @@ __pycache__/
 *.sqlite3
 *.db
 models/artifacts/
+
+# Local ingestion checkpoints and reports
+/data/ingestion/
