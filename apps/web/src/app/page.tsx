@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { getHealth } from "@/lib/api";
 
 export default async function Home() {
@@ -8,7 +9,8 @@ export default async function Home() {
     const health = await getHealth();
     apiOnline = health.status === "healthy";
     apiVersion = health.version;
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     apiOnline = false;
   }
 

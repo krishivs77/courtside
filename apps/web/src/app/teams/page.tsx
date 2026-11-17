@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { Suspense } from "react";
 
 import TeamsExplorer, {
@@ -29,6 +30,7 @@ async function loadTeams(): Promise<{
     const teams = await fetchTeams();
     return { teams, error: false };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("Failed to load NBA teams:", error);
     return { teams: [], error: true };
   }
