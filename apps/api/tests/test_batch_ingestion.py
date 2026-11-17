@@ -113,3 +113,12 @@ def test_resume_reimports_missing_database_records(tmp_path):
               persist=lambda *args: persisted.append(1) or 1,
               stored_ids=lambda *args: set(), sleep=lambda _: None, delay=0)
     assert persisted == [1]
+
+
+def test_second_process_cannot_reuse_locked_checkpoint(tmp_path):
+    path = tmp_path / "batch.json"
+    def fetch(*args):
+        with pytest.raises(RuntimeError, match="Another importer"):
+            run_batch([1], "2025-26", path)
+        return pd.DataFrame()
+    run_batch([1], "2025-26", path, fetch=fetch, sleep=lambda _: None, delay=0)
