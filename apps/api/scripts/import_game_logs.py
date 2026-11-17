@@ -1,4 +1,6 @@
 import argparse
+import math
+import re
 from datetime import datetime, time, timezone
 
 import pandas as pd
@@ -10,38 +12,60 @@ from app.db import engine
 from app.models import Game, Player, PlayerGameStats, Season, Team
 
 
-def get_minutes(value):
+def get_minutes(value) -> float | None:
     if pd.isna(value):
         return None
     if isinstance(value, str) and ":" in value:
         minutes, seconds = value.split(":", 1)
-        return int(minutes) + float(seconds) / 60
-    return float(value)
+        if not minutes.isdigit() or not seconds.isdigit() or not 0 <= int(seconds) < 60:
+            raise ValueError(f"Invalid minutes: {value}")
+        value = int(minutes) + int(seconds) / 60
+    result = float(value)
+    if not math.isfinite(result) or result < 0:
+        raise ValueError(f"Invalid minutes: {value}")
+    return result
 
 
-def get_stat(row, field):
-    value = row[field]
-    return 0 if pd.isna(value) else int(value)
+def get_stat(row, field: str) -> int:
+    value = row.get(field)
+    if pd.isna(value):
+        raise ValueError(f"Missing statistic: {field}")
+    number = float(value)
+    if not math.isfinite(number) or number < 0 or not number.is_integer():
+        raise ValueError(f"Invalid statistic {field}: {value}")
+    return int(number)
+
+
+def parse_matchup(matchup: str) -> tuple[str, str, str]:
+    match = re.fullmatch(r"([A-Z]{2,3}) (vs\. |@ )([A-Z]{2,3})", matchup.strip())
+    if not match or match[1] == match[3]:
+        raise ValueError(f"Unknown matchup: {matchup}")
+    player, marker, opponent = match.groups()
+    return (player, opponent, player) if marker == "vs. " else (opponent, player, player)
+
 
 
 def import_logs(player_nba_id, season):
-    print(f"Fetching player {player_nba_id}, season {season}...")
-
-    response = PlayerGameLog(
-        player_id=player_nba_id,
-        season=season,
-        season_type_all_star="Regular Season",
-        timeout=30,
-    )
-
-    frame = response.get_data_frames()[0]
-
-    if frame.empty:
-        raise RuntimeError(
-            "No game logs returned. Database unchanged."
+    if not re.fullmatch(r"\d{4}-\d{2}", season) or int(season[-2:]) != (int(season[:4]) + 1) % 100:
+        raise ValueError("Season must use consecutive years, e.g. 2025-26")
+    print(f"Fetching player {player_nba_id}, season {season}...", flush=True)
+    try:
+        response = PlayerGameLog(
+            player_id=player_nba_id, season=season,
+            season_type_all_star="Regular Season", timeout=30,
         )
+        frame = response.get_data_frames()[0]
+    except Exception as exc:
+        raise RuntimeError("NBA upstream unavailable; database unchanged. Retry later.") from exc
+    return persist_logs(frame, player_nba_id, season)
 
-    with engine.begin() as conn:
+
+def persist_logs(frame: pd.DataFrame, player_nba_id: int, season: str, db_engine=engine) -> int:
+    """Atomically validate and upsert one player-season response (no inferred zeros)."""
+    if frame.empty:
+        raise ValueError("No game logs returned. Database unchanged.")
+    retrieved_at = datetime.now(timezone.utc)
+    with db_engine.begin() as conn:
         player_id = conn.execute(
             select(Player.id).where(
                 Player.external_id == str(player_nba_id)
@@ -75,20 +99,23 @@ def import_logs(player_nba_id, season):
         for _, row in frame.iterrows():
             matchup = str(row["MATCHUP"])
 
-            if " vs. " in matchup:
-                home_abbr, away_abbr = matchup.split(" vs. ")
-                player_abbr = home_abbr
-            elif " @ " in matchup:
-                away_abbr, home_abbr = matchup.split(" @ ")
-                player_abbr = away_abbr
-            else:
-                raise ValueError(f"Unknown matchup: {matchup}")
-
+            home_abbr, away_abbr, player_abbr = parse_matchup(matchup)
+            if any(abbr not in teams for abbr in (home_abbr, away_abbr)):
+                raise ValueError(f"Unknown team in matchup: {matchup}")
+            if "Player_ID" in row and str(row["Player_ID"]) != str(player_nba_id):
+                raise ValueError("Response contains a different player")
             home_id = teams[home_abbr.strip()]
             away_id = teams[away_abbr.strip()]
             team_id = teams[player_abbr.strip()]
 
             game_date = pd.to_datetime(row["GAME_DATE"]).date()
+
+            start_year = int(season[:4])
+            if not (datetime(start_year, 7, 1).date() <= game_date < datetime(start_year + 1, 10, 1).date()):
+                raise ValueError(f"Game date outside season: {game_date}")
+            external_id = str(row["Game_ID"])
+            if not re.fullmatch(rf"002{start_year % 100:02d}\d{{5}}", external_id):
+                raise ValueError(f"Invalid regular-season game ID: {external_id}")
 
             # Date-only placeholder, NOT verified tipoff time.
             game_timestamp = datetime.combine(
@@ -96,18 +123,24 @@ def import_logs(player_nba_id, season):
             )
 
             game_stmt = insert(Game).values(
-                external_id=str(row["Game_ID"]),
+                external_id=external_id,
                 season_id=season_id,
                 home_team_id=home_id,
                 away_team_id=away_id,
                 scheduled_at=game_timestamp,
                 status="final",
+                game_date=game_date,
+                source="nba_api.PlayerGameLog",
+                timestamp_precision="date",
             )
 
             game_stmt = game_stmt.on_conflict_do_update(
                 index_elements=["external_id"],
                 set_={
                     "season_id": game_stmt.excluded.season_id,
+                    "game_date": game_stmt.excluded.game_date,
+                    "source": game_stmt.excluded.source,
+                    "status": "final",
                     "home_team_id": game_stmt.excluded.home_team_id,
                     "away_team_id": game_stmt.excluded.away_team_id,
                 },
@@ -119,6 +152,8 @@ def import_logs(player_nba_id, season):
                 "game_id": game_id,
                 "player_id": player_id,
                 "team_id": team_id,
+                "source": "nba_api.PlayerGameLog",
+                "retrieved_at": retrieved_at,
                 "minutes": get_minutes(row["MIN"]),
                 "points": get_stat(row, "PTS"),
                 "rebounds": get_stat(row, "REB"),
@@ -134,10 +169,13 @@ def import_logs(player_nba_id, season):
                 "fta": get_stat(row, "FTA"),
             }
 
+            for made, attempted in (("fgm", "fga"), ("three_pm", "three_pa"), ("ftm", "fta")):
+                if values[made] > values[attempted]:
+                    raise ValueError(f"Made shots exceed attempts: {made}")
             stat_stmt = insert(PlayerGameStats).values(**values)
 
             stat_stmt = stat_stmt.on_conflict_do_update(
-                constraint="player_game_stats_game_id_player_id_key",
+                index_elements=["game_id", "player_id"],
                 set_={
                     key: getattr(stat_stmt.excluded, key)
                     for key in values
@@ -149,6 +187,7 @@ def import_logs(player_nba_id, season):
             imported += 1
 
     print(f"Imported {imported} games successfully.")
+    return imported
 
 
 if __name__ == "__main__":

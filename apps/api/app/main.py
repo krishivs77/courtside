@@ -110,3 +110,8 @@ def search_players(
             }
             for row in result
         ]
+
+
+from app.player_games import router as player_router
+
+app.include_router(player_router)

@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -75,6 +76,9 @@ class Game(Base):
     status: Mapped[str] = mapped_column(
         String(30), default="scheduled"
     )
+    game_date: Mapped[date | None] = mapped_column(Date)
+    source: Mapped[str | None] = mapped_column(String(80))
+    timestamp_precision: Mapped[str | None] = mapped_column(String(20))
     home_score: Mapped[int | None] = mapped_column(Integer)
     away_score: Mapped[int | None] = mapped_column(Integer)
 
@@ -93,6 +97,8 @@ class PlayerGameStats(Base):
         ForeignKey("teams.id")
     )
 
+    source: Mapped[str | None] = mapped_column(String(80))
+    retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     minutes: Mapped[float | None] = mapped_column(Float)
     points: Mapped[int] = mapped_column(Integer, default=0)
     rebounds: Mapped[int] = mapped_column(Integer, default=0)
